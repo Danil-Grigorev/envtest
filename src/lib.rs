@@ -1,3 +1,5 @@
+use std::sync::{Mutex, OnceLock};
+
 pub mod binding {
     #![allow(warnings, errors)]
     rust2go::r2g_include_binding!();
@@ -18,21 +20,24 @@ trait EnvTest {
 /// Response returned from [`EnvTest::create`].
 #[derive(rust2go::R2G)]
 struct CreateResponse {
-    err: Vec<String>,
+    err: Option<String>,
     server: Server,
 }
 
 /// Response returned from [`EnvTest::destroy`].
 #[derive(rust2go::R2G)]
 struct DestroyResponse {
-    err: Vec<String>,
+    err: Option<String>,
 }
 
 /// Errors that can occur while creating an environment.
 #[derive(thiserror::Error, Debug)]
 pub enum EnvironmentError {
     #[error("Environment create error: {0}")]
-    CreateError(String),
+    Create(String),
+
+    #[error("Environment create error: lock is poisoned")]
+    Poisoned,
 }
 
 /// Represents a request to create a test environment.
@@ -67,15 +72,15 @@ pub struct BinaryAssetsSettings {
 
     /// download_binary_assets_version is the version of envtest binaries to download.
     /// Defaults to the latest stable version (i.e. excluding alpha / beta / RC versions).
-    pub download_binary_assets_version: String,
+    pub download_binary_assets_version: Option<String>,
 
     /// download_binary_assets_index_url is the index used to discover envtest binaries to download.
     /// Defaults to https://raw.githubusercontent.com/kubernetes-sigs/controller-tools/HEAD/envtest-releases.yaml.
-    pub download_binary_assets_index_url: String,
+    pub download_binary_assets_index_url: Option<String>,
 
     /// binary_assets_directory is the path where the binaries required for the envtest are
     /// located in the local environment. This field can be overridden by setting KUBEBUILDER_ASSETS.
-    pub binary_assets_directory: String,
+    pub binary_assets_directory: Option<String>,
 }
 
 impl Default for BinaryAssetsSettings {
@@ -106,13 +111,12 @@ impl Environment {
     /// Create a new [`Server`] based on the current configuration.
     ///
     /// Returns an [`EnvironmentError`] if the Go side reports any errors.
-    #[must_use]
     pub fn create(&self) -> Result<Server, EnvironmentError> {
+        let _create_guard = create_lock()
+            .lock()
+            .map_err(|_| EnvironmentError::Poisoned)?;
         let res = EnvTestImpl::create(self.clone());
-        if let Some(error) = res.err.first().cloned() {
-            return Err(EnvironmentError::CreateError(error));
-        }
-
+        res.err.map(EnvironmentError::Create).map_or(Ok(()), Err)?;
         Ok(res.server)
     }
 
@@ -121,7 +125,10 @@ impl Environment {
     /// # Errors
     ///
     /// Returns an [`serde_json::Error`] if any CRDs cannot be serialized to JSON.
-    pub fn with_crds(&mut self, crds: Vec<impl serde::Serialize>) -> Result<&mut Self, serde_json::Error> {
+    pub fn with_crds(
+        &mut self,
+        crds: Vec<impl serde::Serialize>,
+    ) -> Result<&mut Self, serde_json::Error> {
         for crd in crds {
             let crd = serde_json::to_string(&crd)?;
             self.crd_install_options.crds.push(crd);
@@ -131,11 +138,16 @@ impl Environment {
     }
 }
 
+fn create_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 /// Errors that can occur while destroying an environment.
 #[derive(thiserror::Error, Debug)]
 pub enum DestroyError {
     #[error("Environment destroy error: {0}")]
-    DestroyError(String),
+    Destroy(String),
 }
 
 /// Represents a running test server.
@@ -163,10 +175,7 @@ impl Server {
     /// Errors returned by the Go side are converted into `DestroyError`.
     pub fn destroy(&self) -> Result<(), DestroyError> {
         let res = EnvTestImpl::destroy(self.kubeconfig.clone());
-        if let Some(error) = res.err.first().cloned() {
-            return Err(DestroyError::DestroyError(error));
-        }
-        Ok(())
+        res.err.map(DestroyError::Destroy).map_or(Ok(()), Err)
     }
 }
 
