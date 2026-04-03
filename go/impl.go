@@ -157,6 +157,17 @@ func (e Envtest) create(req *Environment) (resp CreateResponse) {
 	return
 }
 
+// exist implements check on environment existence.
+func (e Envtest) exist(kubeconfig *string) bool {
+	if kubeconfig == nil || *kubeconfig == "" {
+		return false
+	}
+
+	_, ok := environments.Load(*kubeconfig)
+
+	return ok
+}
+
 // destroy implements EnvTest.
 func (e Envtest) destroy(kubeconfig *string) (resp DestroyResponse) {
 	if kubeconfig == nil || *kubeconfig == "" {
@@ -179,6 +190,8 @@ func (e Envtest) destroy(kubeconfig *string) (resp DestroyResponse) {
 	if err != nil {
 		return storeErr(err, destroyErrorTypeStopEnvironment)
 	}
+
+	environments.Delete(*kubeconfig)
 
 	return
 }

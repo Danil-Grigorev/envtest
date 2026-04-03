@@ -22,8 +22,8 @@ typedef struct BinaryAssetsSettingsRef {
 
 typedef struct CRDInstallOptionsRef {
   struct ListRef paths;
-  struct ListRef crds;
   bool error_if_path_missing;
+  struct ListRef crds;
 } CRDInstallOptionsRef;
 
 typedef struct StringRef {
@@ -63,6 +63,7 @@ var EnvTestImpl EnvTest
 
 type EnvTest interface {
 	create(req *Environment) CreateResponse
+	exist(kubeconfig *string) bool
 	destroy(kubeconfig *string) DestroyResponse
 }
 
@@ -71,6 +72,17 @@ func CEnvTest_create(req C.EnvironmentRef, slot *C.void, cb *C.void) {
 	_new_req := newEnvironment(req)
 	resp := EnvTestImpl.create(&_new_req)
 	resp_ref, buffer := cvt_ref(cntCreateResponse, refCreateResponse)(&resp)
+	asmcall.CallFuncG0P2(unsafe.Pointer(cb), unsafe.Pointer(&resp_ref), unsafe.Pointer(slot))
+	runtime.KeepAlive(resp_ref)
+	runtime.KeepAlive(resp)
+	runtime.KeepAlive(buffer)
+}
+
+//export CEnvTest_exist
+func CEnvTest_exist(kubeconfig C.StringRef, slot *C.void, cb *C.void) {
+	_new_kubeconfig := newString(kubeconfig)
+	resp := EnvTestImpl.exist(&_new_kubeconfig)
+	resp_ref, buffer := cvt_ref(cntC_bool, refC_bool)(&resp)
 	asmcall.CallFuncG0P2(unsafe.Pointer(cb), unsafe.Pointer(&resp_ref), unsafe.Pointer(slot))
 	runtime.KeepAlive(resp_ref)
 	runtime.KeepAlive(resp)
@@ -367,22 +379,22 @@ func refBinaryAssetsSettings(p *BinaryAssetsSettings, buffer *[]byte) C.BinaryAs
 
 type CRDInstallOptions struct {
 	paths                 []string
-	crds                  []string
 	error_if_path_missing bool
+	crds                  []string
 }
 
 func newCRDInstallOptions(p C.CRDInstallOptionsRef) CRDInstallOptions {
 	return CRDInstallOptions{
 		paths:                 new_list_mapper(newString)(p.paths),
-		crds:                  new_list_mapper(newString)(p.crds),
 		error_if_path_missing: newC_bool(p.error_if_path_missing),
+		crds:                  new_list_mapper(newString)(p.crds),
 	}
 }
 func ownCRDInstallOptions(p C.CRDInstallOptionsRef) CRDInstallOptions {
 	return CRDInstallOptions{
 		paths:                 new_list_mapper(ownString)(p.paths),
-		crds:                  new_list_mapper(ownString)(p.crds),
 		error_if_path_missing: newC_bool(p.error_if_path_missing),
+		crds:                  new_list_mapper(ownString)(p.crds),
 	}
 }
 func cntCRDInstallOptions(s *CRDInstallOptions, cnt *uint) [0]C.CRDInstallOptionsRef {
@@ -393,8 +405,8 @@ func cntCRDInstallOptions(s *CRDInstallOptions, cnt *uint) [0]C.CRDInstallOption
 func refCRDInstallOptions(p *CRDInstallOptions, buffer *[]byte) C.CRDInstallOptionsRef {
 	return C.CRDInstallOptionsRef{
 		paths:                 ref_list_mapper(refString)(&p.paths, buffer),
-		crds:                  ref_list_mapper(refString)(&p.crds, buffer),
 		error_if_path_missing: refC_bool(&p.error_if_path_missing, buffer),
+		crds:                  ref_list_mapper(refString)(&p.crds, buffer),
 	}
 }
 
