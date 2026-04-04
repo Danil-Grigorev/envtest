@@ -20,6 +20,11 @@
 //! # run().await.unwrap();
 //! # })
 //! ```
+extern crate self as envtest;
+
+#[cfg(feature = "kube")]
+pub use envtest_macros::envtest;
+
 #[cfg(not(feature = "_docsrs"))]
 pub mod binding {
     #![allow(warnings, errors)]

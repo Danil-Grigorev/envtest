@@ -155,6 +155,40 @@ async fn work_with_namespace_with_kube_client() -> Result<(), Box<dyn std::error
 
 For test suites, prefer one `Environment` per test to avoid shared state between cases.
 
+The crate also exposes an `#[envtest]` attribute for async tests that take a single `kube::Client` argument. The macro creates the environment, derives the client, and passes it into the test body.
+
+```rust
+use envtest::envtest;
+
+#[envtest]
+#[tokio::test]
+async fn namespace_test(client: kube::Client) -> Result<(), Box<dyn std::error::Error>> {
+    let version = client.apiserver_version().await?;
+    assert!(!version.git_version.is_empty());
+    Ok(())
+}
+```
+
+You can also provide a custom environment expression when the default is not enough:
+
+```rust
+use envtest::{Environment, envtest};
+
+fn custom_environment() -> Environment {
+    let mut env = Environment::default();
+    env.binary_assets_settings.download_binary_assets_version = Some("1.32.0".to_owned());
+    env
+}
+
+#[envtest(environment = custom_environment())]
+#[tokio::test]
+async fn namespace_test(client: kube::Client) -> Result<(), Box<dyn std::error::Error>> {
+    let version = client.apiserver_version().await?;
+    assert!(!version.git_version.is_empty());
+    Ok(())
+}
+```
+
 ---
 
 ## Building the Bindings

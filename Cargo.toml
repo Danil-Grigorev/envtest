@@ -6,9 +6,10 @@ description = "A lightweight, type‑safe wrapper around the Kubernetes `envtest
 version = "0.1.0"
 edition = "2024"
 license = "MIT/Apache-2.0"
-include = ["/src", "/go", "/build.rs"]
+include = ["/src", "/go", "/build.rs", "/macros/src", "/macros/Cargo.toml"]
 
 [dependencies]
+envtest-macros = { path = "macros" }
 rust2go = { version = "0.4.3", optional = true}
 serde = "1"
 serde_json = "1"
